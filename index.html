@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEURAL-LINK | Local AI</title>
+    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1"></script>
+    <style>
+        body { background: #000; color: #0f0; font-family: 'monospace'; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+        #console { flex: 1; overflow-y: auto; border: 1px solid #050; padding: 10px; background: #020202; margin-bottom: 10px; box-shadow: inset 0 0 10px #050; }
+        .row { margin-bottom: 8px; }
+        .system { color: #555; }
+        .ai { color: #0f0; font-weight: bold; }
+        .user { color: #0af; }
+        #input-line { display: flex; gap: 10px; }
+        input { flex: 1; background: #000; border: 1px solid #050; color: #0f0; padding: 10px; outline: none; }
+        button { background: #050; color: #0f0; border: none; padding: 10px 20px; cursor: pointer; }
+        #progress-bar { width: 0%; height: 2px; background: #0f0; position: fixed; top: 0; left: 0; transition: width 0.3s; }
+    </style>
+</head>
+<body>
+
+<div id="progress-bar"></div>
+<div id="console">
+    <div class="row system">>>> SYSTEM READY. WAITING FOR NEURAL INITIALIZATION...</div>
+</div>
+
+<div id="input-line">
+    <input type="text" id="userInput" placeholder="Wait for boot..." disabled>
+    <button id="sendBtn" disabled>EXECUTE</button>
+</div>
+
+<script type="module">
+    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
+
+    env.allowLocalModels = false;
+    env.useBrowserCache = true;
+
+    const consoleEl = document.getElementById('console');
+    const inputEl = document.getElementById('userInput');
+    const btnEl = document.getElementById('sendBtn');
+    const progressEl = document.getElementById('progress-bar');
+
+    let classifier;
+
+    function log(text, type = 'system') {
+        const div = document.createElement('div');
+        div.className = `row ${type}`;
+        div.innerText = `> ${text}`;
+        consoleEl.appendChild(div);
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    async function init() {
+        log("INITIALIZING CORE...", "system");
+        
+        try {
+            classifier = await pipeline('sentiment-analysis', 'Xenova/distilbert-base-uncased-finetuned-sst-2-english', {
+                progress_callback: (p) => {
+                    if(p.status === 'progress') {
+                        progressEl.style.width = p.progress + '%';
+                    }
+                }
+            });
+
+            log("NEURAL LINK ESTABLISHED.", "ai");
+            log("Ready for local inference.", "ai");
+            inputEl.disabled = false;
+            btnEl.disabled = false;
+            inputEl.placeholder = "Write a sentence in English...";
+            progressEl.style.height = '0';
+        } catch (e) {
+            log("CRITICAL ERROR: " + e.message, "system");
+            console.error(e);
+        }
+    }
+
+    async function run() {
+        const text = inputEl.value;
+        if(!text || !classifier) return;
+        
+        log(text, "user");
+        inputEl.value = "";
+        
+        try {
+            const result = await classifier(text);
+            const label = result[0].label;
+            const score = (result[0].score * 100).toFixed(2);
+            log(`RESULT: ${label} (${score}% confidence)`, "ai");
+        } catch (err) {
+            log("EXECUTION ERROR: " + err.message, "system");
+        }
+    }
+
+    btnEl.onclick = run;
+    inputEl.onkeydown = (e) => { if(e.key === 'Enter') run(); };
+
+    init();
+</script>
+</body>
+</html>
